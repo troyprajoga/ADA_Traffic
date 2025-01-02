@@ -454,6 +454,8 @@ def create_fixed_map():
 create_fixed_map()
 assign_traffic_weights()
 
+import time  # Import time module for execution time measurement
+
 running = True
 while running:
     screen.fill(WHITE)  # Always clear the screen
@@ -491,12 +493,18 @@ while running:
         elif event.type == pygame.KEYDOWN:  # Handle key presses
             if event.key == pygame.K_SPACE and start and end:  # Spacebar to trigger regular DFS
                 print(f"Running DFS from {start} to {end}")
+                start_time = time.time()  # Start timing
                 new_path, tiles_traveled = dfs(grid, start, end)  # Call the regular DFS function
+                end_time = time.time()  # End timing
+                execution_time_dfs = end_time - start_time  # Calculate execution time
 
                 if new_path:
                     print("Path found!")
                     print(f"Total tiles traveled: {tiles_traveled}")
                     print(f"Final path length (nodes): {len(new_path)}")
+                    print(f"Execution time for DFS: {execution_time_dfs:.6f} seconds")
+                    print(f"Total nodes explored (DFS): {tiles_traveled}")
+                    print(f"Space complexity for DFS: Max stack size = {len(new_path)}, Total visited nodes = {tiles_traveled}")
 
                     # Calculate the weighted cost of the final path
                     final_path_cost, color_breakdown = calculate_final_path_weight(new_path)
@@ -511,12 +519,18 @@ while running:
                     print(f"Total tiles traveled: {tiles_traveled}")
             elif event.key == pygame.K_o and start and end:  # "O" key to trigger optimized DFS
                 print(f"Running optimized DFS from {start} to {end}")
+                start_time = time.time()  # Start timing
                 new_optimized_path, tiles_traveled = dfs_with_heuristics(grid, start, end)  # Call the optimized DFS function
+                end_time = time.time()  # End timing
+                execution_time_optimized_dfs = end_time - start_time  # Calculate execution time
 
                 if new_optimized_path:
                     print("Optimized path found!")
                     print(f"Total tiles traveled: {tiles_traveled}")
                     print(f"Optimized final path length (nodes): {len(new_optimized_path)}")
+                    print(f"Execution time for Optimized DFS: {execution_time_optimized_dfs:.6f} seconds")
+                    print(f"Total nodes explored (Optimized DFS): {tiles_traveled}")
+                    print(f"Space complexity for Optimized DFS: Max stack size = {len(new_optimized_path)}, Total visited nodes = {tiles_traveled}")
 
                     # Calculate the weighted cost of the optimized final path
                     optimized_final_path_cost, optimized_color_breakdown = calculate_final_path_weight(new_optimized_path)
@@ -536,6 +550,8 @@ while running:
                 toggle_optimized_path()
 
     pygame.display.flip()
+
+
 
 
 
