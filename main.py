@@ -10,6 +10,10 @@ CELL_SIZE = WIDTH // COLS
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Map Pathfinder with Traffic Simulation")
 
+current_obstacles = []  # To track the currently displayed obstacles
+obstacles = [(4,4), (7, 15),(11,3), (15, 8),(1,21),(16,17),(20,10)]  # Fixed obstacle positions
+obstacle_color = (169, 169, 169)  # Gray for obstacles
+
 # Colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -19,33 +23,31 @@ YELLOW = (255, 255, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 CYAN = (0, 255, 255)
-PINK = (255, 105, 180)
-PURPLE = (128, 0, 128)
-obstacle_color = (169, 169, 169)
 
-# Global Variables
+final_path = []  # Store the most recent final path
+trail_visible = False  # Track whether the path is visible
+
+optimized_final_path = []  # Store the most recent final path for the optimized DFS
+optimized_trail_visible = False  # Track visibility of the optimized path
+original_tile_states = {}  # Dictionary to store the original state of tiles before placing obstacles
+
+
+# Grid and other variables
 grid = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 nodes = []  # List of nodes (manually defined)
 road_segments = []  # Store all road segments with unique properties
 start = None
 end = None
-road_counter = 0
-current_obstacles = []  # To track the currently displayed obstacles
-original_tile_states = {}  # Dictionary to store the original state of tiles before placing obstacles
-obstacles = [(4, 4), (7, 15), (11, 3), (15, 8), (1, 21), (16, 17), (20, 10)]  # Fixed obstacle positions
-final_path = []
-optimized_final_path = []
-trail_visible = False
-optimized_trail_visible = False
-
+road_counter = 0  # Global counter for unique road IDs
 
 def draw_grid():
-    """Draw the grid and fill the cells with appropriate colors."""
+    """Draws the grid and fills the cells with appropriate colors."""
     for row in range(ROWS):
         for col in range(COLS):
             color = WHITE
             if grid[row][col] == 1:
                 color = BLACK  # Default road color
+                # Check if the cell is part of a road segment with traffic
                 for segment in road_segments:
                     if (row, col) in segment["cells"]:
                         weight = segment["weight"]
@@ -134,35 +136,62 @@ def place_fixed_obstacles():
         grid[row][col] = -1  # Mark as an obstacle
 
 def remove_all_obstacles():
-    """Remove all obstacles from the grid."""
-    global current_obstacles
+    """
+    Remove all obstacles from the grid and restore the original tile states.
+    """
+    global current_obstacles, original_tile_states
     for obstacle in current_obstacles:
         row, col = obstacle
-        grid[row][col] = original_tile_states.get((row, col), 0)
+        if (row, col) in original_tile_states:
+            grid[row][col] = original_tile_states[(row, col)]  # Restore the original tile state
+        else:
+            grid[row][col] = 0  # Default to empty if no original state recorded
+
+    # Clear the current obstacles and tile states
     current_obstacles = []
+    original_tile_states = {}
 
 
 
 def draw_obstacles():
-    """Draw currently active obstacles."""
+    """
+    Draw the currently active obstacles on the grid.
+    """
     for obstacle in current_obstacles:
         row, col = obstacle
-        pygame.draw.rect(screen, BLACK, (col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE))
-        pygame.draw.circle(screen, obstacle_color, (col * CELL_SIZE + CELL_SIZE // 2, row * CELL_SIZE + CELL_SIZE // 2), CELL_SIZE // 4)
+        pygame.draw.rect(screen, BLACK, (col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE))  # Black background
+        pygame.draw.circle(screen, obstacle_color,  # Gray circle
+                           (col * CELL_SIZE + CELL_SIZE // 2, row * CELL_SIZE + CELL_SIZE // 2),
+                           CELL_SIZE // 4)
 
 
 
 def randomize_obstacles(num_obstacles):
-    """Randomize the placement of obstacles."""
+    """
+    Randomize the placement of obstacles from fixed positions.
+    :param num_obstacles: Number of obstacles to display.
+    """
     global current_obstacles, original_tile_states
+    # Remove current obstacles
     for obstacle in current_obstacles:
         row, col = obstacle
-        grid[row][col] = original_tile_states.get((row, col), 0)
+        if (row, col) in original_tile_states:
+            grid[row][col] = original_tile_states[(row, col)]  # Restore the original tile state
+        else:
+            grid[row][col] = 0  # Default to empty if no original state recorded
+
+    # Clear the current obstacles and tile states
+    current_obstacles = []
+    original_tile_states = {}
+
+    # Randomly select new obstacles
     current_obstacles = random.sample(obstacles, min(num_obstacles, len(obstacles)))
+
+    # Place the new obstacles and record original states
     for obstacle in current_obstacles:
         row, col = obstacle
-        original_tile_states[(row, col)] = grid[row][col]
-        grid[row][col] = -1
+        original_tile_states[(row, col)] = grid[row][col]  # Save the original tile state
+        grid[row][col] = -1  # Mark the cell as an obstacle
 
 
 
@@ -194,9 +223,21 @@ def assign_traffic_weights():
             row, col = cell
             grid[row][col] = 1  # Keep it traversable
 
+
+import time  # Import time module
+
+import time  # Import time module
+
 def dfs(grid, start, end):
-    """Perform Depth-First Search (DFS) to find a path."""
-    start_time = time.perf_counter()
+    """
+    Perform Depth-First Search (DFS) to find a path from start to end.
+    Calculate execution time and return path without visualization delays.
+    :param grid: 2D grid representing the map.
+    :param start: Tuple (row, col) for the starting position.
+    :param end: Tuple (row, col) for the ending position.
+    :return: Tuple (path, tiles_traveled, execution_time_microseconds).
+    """
+    start_time = time.perf_counter()  # Start the high-resolution timer
     stack = [start]
     visited = set()
     parent = {}
@@ -206,15 +247,19 @@ def dfs(grid, start, end):
         current = stack.pop()
         if current in visited:
             continue
+
         visited.add(current)
         tiles_traveled += 1
-        if current == end:
+
+        if current == end:  # Endpoint found
             path = []
             while current:
                 path.append(current)
                 current = parent.get(current)
-            execution_time = (time.perf_counter() - start_time) * 1_000_000
-            return path[::-1], tiles_traveled, execution_time
+            execution_time = (time.perf_counter() - start_time) * 1_000_000  # Convert to microseconds
+            return path[::-1], tiles_traveled, execution_time  # Reverse the path and return
+
+        # Explore neighbors (up, down, left, right)
         directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
         for dr, dc in directions:
             neighbor = (current[0] + dr, current[1] + dc)
@@ -223,20 +268,24 @@ def dfs(grid, start, end):
                     stack.append(neighbor)
                     parent[neighbor] = current
 
-    execution_time = (time.perf_counter() - start_time) * 1_000_000
-    return None, tiles_traveled, execution_time
+    execution_time = (time.perf_counter() - start_time) * 1_000_000  # Convert to microseconds
+    return None, tiles_traveled, execution_time  # No path found
 
 
 
 
-def highlight_path(path, color):
-    """Highlight the final path on the grid."""
+def highlight_path(path):
+    """
+    Highlights the path found by DFS on the grid.
+    :param path: List of nodes representing the path.
+    """
     for node in path:
         if node == start or node == end:
             continue
         row, col = node
-        pygame.draw.circle(screen, color, (col * CELL_SIZE + CELL_SIZE // 2, row * CELL_SIZE + CELL_SIZE // 2), CELL_SIZE // 4)
-
+        pygame.draw.circle(screen, (255, 105, 180), (col * CELL_SIZE + CELL_SIZE // 2, row * CELL_SIZE + CELL_SIZE // 2), CELL_SIZE // 4)
+        pygame.display.flip()
+        pygame.time.delay(50)
 
 def clear_final_path():
     """Clears the final path from the grid."""
@@ -255,33 +304,57 @@ def draw_trail():
     pygame.display.flip()
 
 def redraw():
-    """Redraw the entire screen."""
-    screen.fill(WHITE)
-    draw_grid()
-    draw_obstacles()
+    """
+    Redraw the entire screen including the grid, obstacles, and paths based on visibility flags.
+    """
+    screen.fill(WHITE)  # Clear the screen
+    draw_grid()  # Redraw the grid
+    draw_obstacles()  # Redraw the obstacles
+
+    # Draw the regular DFS path if visible
     if trail_visible:
-        highlight_path(final_path, PINK)
+        for node in final_path:
+            row, col = node
+            pygame.draw.circle(screen, (255, 105, 180),  # Pink color for the final path
+                               (col * CELL_SIZE + CELL_SIZE // 2, row * CELL_SIZE + CELL_SIZE // 2),
+                               CELL_SIZE // 4)
+
+    # Draw the optimized DFS path if visible
     if optimized_trail_visible:
-        highlight_path(optimized_final_path, PURPLE)
-    pygame.display.flip()
+        for node in optimized_final_path:
+            row, col = node
+            pygame.draw.circle(screen, (128, 0, 128),  # Purple color for the optimized path
+                               (col * CELL_SIZE + CELL_SIZE // 2, row * CELL_SIZE + CELL_SIZE // 2),
+                               CELL_SIZE // 4)
+
+    pygame.display.flip()  # Update the display
 
 
 def toggle_path():
-    """Toggle visibility of the regular DFS path."""
-    global trail_visible
-    trail_visible = not trail_visible
-    redraw()
+    """
+    Toggles the visibility of the final path (regular DFS).
+    """
+    global trail_visible  # Use the global visibility flag
+    trail_visible = not trail_visible  # Toggle the flag
+    redraw()  # Redraw everything
 
 
 def visualize_trail(trail, start, end):
-    """Visualize the trail of the search process."""
+    """
+    Visualize the trail of the search process.
+    :param trail: List of nodes representing the trail.
+    :param start: Tuple for the starting position.
+    :param end: Tuple for the ending position.
+    """
     for node in trail:
-        if node == start or node == end:
+        if node == start or node == end:  # Skip start and end nodes
             continue
         row, col = node
-        pygame.draw.circle(screen, CYAN, (col * CELL_SIZE + CELL_SIZE // 2, row * CELL_SIZE + CELL_SIZE // 2), CELL_SIZE // 4)
+        pygame.draw.circle(screen, CYAN, 
+                           (col * CELL_SIZE + CELL_SIZE // 2, row * CELL_SIZE + CELL_SIZE // 2), 
+                           CELL_SIZE // 4)
         pygame.display.flip()
-        pygame.time.delay(50)
+        pygame.time.delay(50)  # Add a delay for visualization
 
 def calculate_path_weight(path):
     """
@@ -313,40 +386,67 @@ def calculate_path_weight(path):
 
 
 def dfs_with_heuristics(grid, start, end):
-    """Perform an optimized DFS with heuristics."""
-    start_time = time.perf_counter()
-    stack = [(start, 0)]
-    visited = set()
-    parent = {}
-    tiles_traveled = 0
+    """
+    Perform an optimized DFS using weights and heuristics to prioritize traversal.
+    Measure execution time for the calculation only, without including visualization.
+    :param grid: 2D grid representing the map.
+    :param start: Tuple (row, col) for the starting position.
+    :param end: Tuple (row, col) for the ending position.
+    :return: Tuple (path, tiles_traveled, execution_time_microseconds).
+    """
+    start_time = time.perf_counter()  # Start the high-resolution timer
+    stack = [(start, 0)]  # Store (node, cumulative_cost) in stack
+    visited = set()  # Track visited nodes
+    parent = {}  # Keep track of the path
+    tiles_traveled = 0  # Count total tiles visited
 
     def heuristic(node):
+        """Calculate Manhattan distance from the current node to the endpoint."""
         return abs(node[0] - end[0]) + abs(node[1] - end[1])
 
     while stack:
+        # Sort the stack to prioritize nodes with the lowest weight + heuristic
         stack.sort(key=lambda x: x[1] + heuristic(x[0]), reverse=True)
-        current, current_cost = stack.pop()
+        current, current_cost = stack.pop()  # Pop the node with the lowest cost + heuristic
+
         if current in visited:
             continue
+
         visited.add(current)
         tiles_traveled += 1
-        if current == end:
+
+        if current == end:  # Endpoint found
             path = []
             while current:
                 path.append(current)
                 current = parent.get(current)
-            execution_time = (time.perf_counter() - start_time) * 1_000_000
-            return path[::-1], tiles_traveled, execution_time
-        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+            execution_time = (time.perf_counter() - start_time) * 1_000_000  # Convert to microseconds
+            return path[::-1], tiles_traveled, execution_time  # Reverse the path and return
+
+        # Explore neighbors (up, down, left, right)
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # Up, Down, Left, Right
         for dr, dc in directions:
             neighbor = (current[0] + dr, current[1] + dc)
+
+            # Check if the neighbor is within bounds and is a road
             if 0 <= neighbor[0] < ROWS and 0 <= neighbor[1] < COLS and grid[neighbor[0]][neighbor[1]] == 1:
                 if neighbor not in visited:
-                    stack.append((neighbor, current_cost + 1))
-                    parent[neighbor] = current
+                    # Determine the weight of the road segment the neighbor belongs to
+                    weight = 1.0  # Default weight
+                    for segment in road_segments:
+                        if neighbor in segment["cells"]:
+                            weight = segment["weight"]
+                            break
 
-    execution_time = (time.perf_counter() - start_time) * 1_000_000
-    return None, tiles_traveled, execution_time
+                    # Add the neighbor to the stack with the updated cumulative cost
+                    stack.append((neighbor, current_cost + weight))
+                    parent[neighbor] = current  # Record the parent for backtracking
+
+    execution_time = (time.perf_counter() - start_time) * 1_000_000  # Convert to microseconds
+    return None, tiles_traveled, execution_time  # No path found
+
+
+
 
 
 def highlight_optimized_path(path):
@@ -364,10 +464,15 @@ def highlight_optimized_path(path):
 
 
 def toggle_optimized_path():
-    """Toggle visibility of the optimized DFS path."""
-    global optimized_trail_visible
-    optimized_trail_visible = not optimized_trail_visible
+    """
+    Toggles the visibility of the optimized DFS final path.
+    """
+    global optimized_trail_visible  # Declare optimized_trail_visible as global
+    optimized_trail_visible = not optimized_trail_visible  # Toggle the trail visibility
+
+    # Redraw everything based on visibility flags
     redraw()
+
 
 
 def calculate_final_path_weight(path):
@@ -469,34 +574,30 @@ def create_fixed_map():
 create_fixed_map()
 assign_traffic_weights()
 
-# Main Loop
+# Main loop
 running = True
 while running:
     for event in pygame.event.get():
-        # Quit the game
         if event.type == pygame.QUIT:
             running = False
             pygame.quit()
             sys.exit()
 
-        # Set start node on left-click
-        elif pygame.mouse.get_pressed()[0]:
+        elif pygame.mouse.get_pressed()[0]:  # Left-click to set start
             pos = pygame.mouse.get_pos()
             row, col = pos[1] // CELL_SIZE, pos[0] // CELL_SIZE
-            if (row, col) in nodes:
+            if (row, col) in nodes:  # Check if the clicked cell is a node
                 start = (row, col)
                 print(f"Start node set to: {start}")
 
-        # Set end node on right-click
-        elif pygame.mouse.get_pressed()[2]:
+        elif pygame.mouse.get_pressed()[2]:  # Right-click to set end
             pos = pygame.mouse.get_pos()
             row, col = pos[1] // CELL_SIZE, pos[0] // CELL_SIZE
-            if (row, col) in nodes:
+            if (row, col) in nodes:  # Check if the clicked cell is a node
                 end = (row, col)
                 print(f"End node set to: {end}")
 
-        # Handle keyboard events
-        elif event.type == pygame.KEYDOWN:
+        elif event.type == pygame.KEYDOWN:  # Handle key presses
             if event.key == pygame.K_1:  # Randomize 1 obstacle
                 randomize_obstacles(1)
                 redraw()
@@ -513,50 +614,88 @@ while running:
                 remove_all_obstacles()
                 redraw()
 
-            elif event.key == pygame.K_SPACE and start and end:  # Regular DFS
+            elif event.key == pygame.K_SPACE and start and end:  # Spacebar to trigger regular DFS
                 print(f"Running DFS from {start} to {end}")
+                
+                # Calculate path without visualization
                 new_path, tiles_traveled, exec_time_microseconds = dfs(grid, start, end)
 
                 if new_path:
-                    print(f"Path found in {exec_time_microseconds:.2f} μs")
-                    print(f"Tiles traveled: {tiles_traveled}, Path length: {len(new_path)}")
-                    final_path = new_path
-                    total_weight, tile_breakdown = calculate_path_weight(new_path)
-                    print(f"Path weight: {total_weight:.2f}, Breakdown: {tile_breakdown}")
+                    print("Path found!")
+                    print(f"Execution time: {exec_time_microseconds:.2f} μs")
+                    print(f"Total tiles traveled: {tiles_traveled}")
+                    print(f"Final path length (nodes): {len(new_path)}")
+                    final_path = new_path  # Update the final path
 
+                    # Analyze the path weight
+                    total_weight, tile_breakdown = calculate_path_weight(new_path)
+                    print(f"Total path weight: {total_weight:.2f}")
+                    print(f"Tile breakdown: {tile_breakdown}")
+                    print("-----------------------------")
+
+                    # Visualize the search trail after calculation
                     visualize_trail(new_path, start, end)
-                    highlight_path(final_path, (255, 105, 180))  # Pink
-                    trail_visible = True
+
+                    # Highlight the final path
+                    for node in final_path:
+                        if node == start or node == end:
+                            continue
+                        row, col = node
+                        pygame.draw.circle(screen, (255, 105, 180),  # Pink color for final path
+                                           (col * CELL_SIZE + CELL_SIZE // 2, row * CELL_SIZE + CELL_SIZE // 2),
+                                           CELL_SIZE // 4)
+                    trail_visible = True  # Automatically show the path
                 else:
                     print("No path found!")
+                    print(f"Execution time: {exec_time_microseconds:.2f} μs")
+                    print(f"Total tiles traveled: {tiles_traveled}")
 
                 redraw()
 
-            elif event.key == pygame.K_r:  # Toggle DFS path visibility
+            elif event.key == pygame.K_r:  # Toggle visibility of the regular DFS path
                 toggle_path()
 
-            elif event.key == pygame.K_o and start and end:  # Optimized DFS
-                print(f"Running Optimized DFS from {start} to {end}")
+            elif event.key == pygame.K_o and start and end:  # "O" key to trigger optimized DFS
+                print(f"Running optimized DFS from {start} to {end}")
+                
+                # Calculate path without visualization
                 new_optimized_path, tiles_traveled, exec_time_microseconds = dfs_with_heuristics(grid, start, end)
 
                 if new_optimized_path:
-                    print(f"Optimized path found in {exec_time_microseconds:.2f} μs")
-                    print(f"Tiles traveled: {tiles_traveled}, Path length: {len(new_optimized_path)}")
-                    optimized_final_path = new_optimized_path
-                    total_weight, tile_breakdown = calculate_path_weight(new_optimized_path)
-                    print(f"Path weight: {total_weight:.2f}, Breakdown: {tile_breakdown}")
+                    print("Optimized path found!")
+                    print(f"Execution time: {exec_time_microseconds:.2f} μs")
+                    print(f"Total tiles traveled: {tiles_traveled}")
+                    print(f"Optimized final path length (nodes): {len(new_optimized_path)}")
+                    optimized_final_path = new_optimized_path  # Update the optimized final path
 
+                    # Analyze the path weight
+                    total_weight, tile_breakdown = calculate_path_weight(new_optimized_path)
+                    print(f"Total path weight: {total_weight:.2f}")
+                    print(f"Tile breakdown: {tile_breakdown}")
+                    print("-----------------------------")
+
+                    # Visualize the search trail after calculation
                     visualize_trail(new_optimized_path, start, end)
-                    highlight_path(optimized_final_path, (128, 0, 128))  # Purple
-                    optimized_trail_visible = True
+
+                    # Highlight the final optimized path
+                    for node in optimized_final_path:
+                        if node == start or node == end:
+                            continue
+                        row, col = node
+                        pygame.draw.circle(screen, (128, 0, 128),  # Purple color for optimized path
+                                        (col * CELL_SIZE + CELL_SIZE // 2, row * CELL_SIZE + CELL_SIZE // 2),
+                                        CELL_SIZE // 4)
+                    optimized_trail_visible = True  # Automatically show the optimized path
                 else:
                     print("No optimized path found!")
+                    print(f"Execution time: {exec_time_microseconds:.2f} μs")
+                    print(f"Total tiles traveled: {tiles_traveled}")
 
                 redraw()
 
-            elif event.key == pygame.K_p:  # Toggle optimized DFS path visibility
+
+            elif event.key == pygame.K_p:  # Toggle visibility of the optimized DFS path
                 toggle_optimized_path()
 
-    # Redraw the screen
-    redraw()
+    redraw()  # Continuously redraw the screen
     pygame.display.flip()
