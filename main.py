@@ -41,7 +41,7 @@ end = None
 road_counter = 0  # Global counter for unique road IDs
 
 def draw_grid():
-    """Draws the grid and fills the cells with appropriate colors."""
+    #Draws the grid and fills the cells with appropriate colors.
     for row in range(ROWS):
         for col in range(COLS):
             color = WHITE
@@ -118,27 +118,16 @@ def build_staircase_diagonal(start_pos, length, direction="down-right"):
     road_segments.append(segment)  # Store the road segment
 
 def build_single_road(position):
-    """
-    Marks a single grid cell as a traversable road.
-    :param position: Tuple (row, col) specifying the grid cell.
-    """
     row, col = position
     if 0 <= row < ROWS and 0 <= col < COLS:  # Ensure it's within grid bounds
         grid[row][col] = 1  # Mark as road
 
 def place_fixed_obstacles():
-    """
-    Place fixed obstacles at predefined positions.
-    Obstacles are marked as -1 in the grid and shown as gray dots.
-    """
     for obstacle in obstacles:
         row, col = obstacle
         grid[row][col] = -1  # Mark as an obstacle
 
 def remove_all_obstacles():
-    """
-    Remove all obstacles from the grid and restore the original tile states.
-    """
     global current_obstacles, original_tile_states
     for obstacle in current_obstacles:
         row, col = obstacle
@@ -154,9 +143,6 @@ def remove_all_obstacles():
 
 
 def draw_obstacles():
-    """
-    Draw the currently active obstacles on the grid.
-    """
     for obstacle in current_obstacles:
         row, col = obstacle
         pygame.draw.rect(screen, BLACK, (col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE))  # Black background
@@ -167,10 +153,6 @@ def draw_obstacles():
 
 
 def randomize_obstacles(num_obstacles):
-    """
-    Randomize the placement of obstacles from fixed positions.
-    :param num_obstacles: Number of obstacles to display.
-    """
     global current_obstacles, original_tile_states
     # Remove current obstacles
     for obstacle in current_obstacles:
@@ -196,13 +178,6 @@ def randomize_obstacles(num_obstacles):
 
 
 def assign_traffic_weights():
-    """
-    Assigns traffic weights to 20% of the road segments to simulate traffic.
-    Roads with traffic are colored:
-    - Yellow (1.3x weight)
-    - Orange (1.6x weight)
-    - Red (2.0x weight)
-    """
     # Traffic levels and their weights
     traffic_weights = {
         "yellow": 1.3,
@@ -229,14 +204,6 @@ import time  # Import time module
 import time  # Import time module
 
 def dfs(grid, start, end):
-    """
-    Perform Depth-First Search (DFS) to find a path from start to end.
-    Calculate execution time and return path without visualization delays.
-    :param grid: 2D grid representing the map.
-    :param start: Tuple (row, col) for the starting position.
-    :param end: Tuple (row, col) for the ending position.
-    :return: Tuple (path, tiles_traveled, execution_time_microseconds).
-    """
     start_time = time.perf_counter()  # Start the high-resolution timer
     stack = [start]
     visited = set()
@@ -275,10 +242,7 @@ def dfs(grid, start, end):
 
 
 def highlight_path(path):
-    """
-    Highlights the path found by DFS on the grid.
-    :param path: List of nodes representing the path.
-    """
+
     for node in path:
         if node == start or node == end:
             continue
@@ -288,25 +252,20 @@ def highlight_path(path):
         pygame.time.delay(50)
 
 def clear_final_path():
-    """Clears the final path from the grid."""
     for node in final_path:
         row, col = node
         pygame.draw.rect(screen, BLACK, (col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE))
     pygame.display.flip()
 
 def draw_trail():
-    """
-    Draws a trail of yellow nodes for the final path.
-    """
+
     for node in final_path:
         row, col = node
         pygame.draw.circle(screen, YELLOW, (col * CELL_SIZE + CELL_SIZE // 2, row * CELL_SIZE + CELL_SIZE // 2), CELL_SIZE // 4)
     pygame.display.flip()
 
 def redraw():
-    """
-    Redraw the entire screen including the grid, obstacles, and paths based on visibility flags.
-    """
+    #Redraw the entire screen including the grid, obstacles, and paths based on visibility flags.
     screen.fill(WHITE)  # Clear the screen
     draw_grid()  # Redraw the grid
     draw_obstacles()  # Redraw the obstacles
@@ -331,21 +290,12 @@ def redraw():
 
 
 def toggle_path():
-    """
-    Toggles the visibility of the final path (regular DFS).
-    """
     global trail_visible  # Use the global visibility flag
     trail_visible = not trail_visible  # Toggle the flag
     redraw()  # Redraw everything
 
 
 def visualize_trail(trail, start, end):
-    """
-    Visualize the trail of the search process.
-    :param trail: List of nodes representing the trail.
-    :param start: Tuple for the starting position.
-    :param end: Tuple for the ending position.
-    """
     for node in trail:
         if node == start or node == end:  # Skip start and end nodes
             continue
@@ -357,11 +307,6 @@ def visualize_trail(trail, start, end):
         pygame.time.delay(50)  # Add a delay for visualization
 
 def calculate_path_weight(path):
-    """
-    Calculate the weighted cost of the path and a breakdown of tile counts by type.
-    :param path: List of nodes representing the path.
-    :return: Tuple (total_weight, tile_breakdown).
-    """
     total_weight = 0
     tile_breakdown = {"black": 0, "yellow": 0, "orange": 0, "red": 0}
 
@@ -386,14 +331,6 @@ def calculate_path_weight(path):
 
 
 def dfs_with_heuristics(grid, start, end):
-    """
-    Perform an optimized DFS using weights and heuristics to prioritize traversal.
-    Measure execution time for the calculation only, without including visualization.
-    :param grid: 2D grid representing the map.
-    :param start: Tuple (row, col) for the starting position.
-    :param end: Tuple (row, col) for the ending position.
-    :return: Tuple (path, tiles_traveled, execution_time_microseconds).
-    """
     start_time = time.perf_counter()  # Start the high-resolution timer
     stack = [(start, 0)]  # Store (node, cumulative_cost) in stack
     visited = set()  # Track visited nodes
@@ -401,7 +338,7 @@ def dfs_with_heuristics(grid, start, end):
     tiles_traveled = 0  # Count total tiles visited
 
     def heuristic(node):
-        """Calculate Manhattan distance from the current node to the endpoint."""
+        #Calculate Manhattan distance from the current node to the endpoint.
         return abs(node[0] - end[0]) + abs(node[1] - end[1])
 
     while stack:
@@ -450,10 +387,6 @@ def dfs_with_heuristics(grid, start, end):
 
 
 def highlight_optimized_path(path):
-    """
-    Highlights the path found by the optimized DFS on the grid.
-    :param path: List of nodes representing the path.
-    """
     for node in path:
         if node == start or node == end:
             continue
@@ -464,9 +397,6 @@ def highlight_optimized_path(path):
 
 
 def toggle_optimized_path():
-    """
-    Toggles the visibility of the optimized DFS final path.
-    """
     global optimized_trail_visible  # Declare optimized_trail_visible as global
     optimized_trail_visible = not optimized_trail_visible  # Toggle the trail visibility
 
@@ -476,11 +406,6 @@ def toggle_optimized_path():
 
 
 def calculate_final_path_weight(path):
-    """
-    Calculate the weighted cost of the final path based on tile colors (weights).
-    :param path: List of nodes representing the final path.
-    :return: The total weighted cost of the path and a breakdown of tiles by weight.
-    """
     total_weighted_cost = 0
     color_count = {"black": 0, "yellow": 0, "orange": 0, "red": 0}
 
